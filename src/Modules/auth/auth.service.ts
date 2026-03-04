@@ -4,15 +4,18 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
+import type { GoogleUser, JwtPayload } from './interfaces/auth.interface';
 
 @Injectable()
 export class AuthService {
-    constructor(private jwtService: JwtService,
+    constructor(
+        private jwtService: JwtService,
         private configService: ConfigService,
         @InjectRepository(User)
-        private userRepo: Repository<User>) { }
+        private userRepo: Repository<User>,
+    ) { }
 
-    async googleLogin(googleUser: any) {
+    async googleLogin(googleUser: GoogleUser) {
         if (!googleUser) {
             return { message: 'No user from Google' };
         }
@@ -46,23 +49,25 @@ export class AuthService {
                 expiresIn: '30m',
             }),
         };
-
     }
     refreshToken(refreshToken: string) {
         try {
-            const payload = this.jwtService.verify(refreshToken, {
+            const payload = this.jwtService.verify<JwtPayload>(refreshToken, {
                 secret: this.configService.get<string>('JWT_REFRESH_SECRET', ''),
-            })
-            const newPayload = {
+            });
+            const newPayload: JwtPayload = {
+                id: payload.id,
                 email: payload.email,
                 firstName: payload.firstName,
                 lastName: payload.lastName,
-            }
+            };
             return {
                 accessToken: this.jwtService.sign(newPayload),
-            }
-        } catch (error) {
-            throw new UnauthorizedException('The refresh token is invalid or has expired.');
+            };
+        } catch {
+            throw new UnauthorizedException(
+                'The refresh token is invalid or has expired.',
+            );
         }
     }
 }
