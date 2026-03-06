@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Meeting } from './entities/meeting.entity';
-import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { MeetingResponseDto } from './dto/meeting-response.dto';
 @Injectable()
