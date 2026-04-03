@@ -24,7 +24,8 @@ import {
   },
 })
 export class MeetingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect {
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   // Lưu các cổng kết nối (Transport) mà 1 User đang có: <socketId, transportId[]>
   private clientTransports = new Map<string, string[]>();
   // Lưu Camera/Mic (Producer) của 1 User đang phát: <socketId, producerId[]>
@@ -38,7 +39,7 @@ export class MeetingGateway
 
   private readonly logger = new Logger(MeetingGateway.name);
 
-  constructor(private readonly mediasoupService: MediasoupService) { }
+  constructor(private readonly mediasoupService: MediasoupService) {}
 
   handleDisconnect(client: Socket) {
     this.logger.log(`[+] Client vừa kết nối: ${client.id}`);
@@ -104,7 +105,7 @@ export class MeetingGateway
       transportId: string;
       kind: 'audio' | 'video';
       rtpParameters: RtpParameters;
-      appData: { roomId: string; userId: string;[key: string]: unknown };
+      appData: { roomId: string; userId: string; [key: string]: unknown };
     },
     @ConnectedSocket() client: Socket,
   ) {
@@ -133,9 +134,10 @@ export class MeetingGateway
   }
 
   @SubscribeMessage('closeProducer')
-  async handleCloseProducer(
+  handleCloseProducer(
     @MessageBody() data: { roomId: string; producerId: string },
-    @ConnectedSocket() client: Socket,) {
+    @ConnectedSocket() client: Socket,
+  ) {
     const producer = this.producers.get(data.producerId);
     if (producer) {
       producer.close();
@@ -143,7 +145,7 @@ export class MeetingGateway
 
       client.to(data.roomId).emit('producerClosed', {
         socketId: client.id,
-        producerId: data.producerId
+        producerId: data.producerId,
       });
       return { closed: true };
     }
