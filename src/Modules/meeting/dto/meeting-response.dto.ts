@@ -1,7 +1,14 @@
 export class MeetingResponseDto {
-    id: string;
-    roomId: string;
-    hostId: string;
-    isActive: boolean;
-    createdAt: Date;
+  id: string;
+  roomId: string;
+  hostId: string;
+  isActive: boolean;
+  createdAt: Date;
+  participants?: {
+    userId: string;
+    joinedAt: Date;
+    firstName: string;
+    lastName: string;
+    avatar: string;
+  }[];
 }
