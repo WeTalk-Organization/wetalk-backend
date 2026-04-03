@@ -12,6 +12,7 @@ import { MediasoupService } from '../mediasoup/mediasoup.service';
 import { Logger } from '@nestjs/common';
 import {
   Consumer,
+  Producer,
   DtlsParameters,
   RtpCapabilities,
   RtpParameters,
@@ -23,8 +24,7 @@ import {
   },
 })
 export class MeetingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   // Lưu các cổng kết nối (Transport) mà 1 User đang có: <socketId, transportId[]>
   private clientTransports = new Map<string, string[]>();
   // Lưu Camera/Mic (Producer) của 1 User đang phát: <socketId, producerId[]>
@@ -32,12 +32,13 @@ export class MeetingGateway
   // Lưu các luồng Video/Audio (Consumer) mà 1 User đang xem: <socketId, consumerId[]>
   private clientConsumers = new Map<string, string[]>();
   private consumers = new Map<string, Consumer>();
+  private producers = new Map<string, Producer>();
   @WebSocketServer()
   server: Server;
 
   private readonly logger = new Logger(MeetingGateway.name);
 
-  constructor(private readonly mediasoupService: MediasoupService) {}
+  constructor(private readonly mediasoupService: MediasoupService) { }
 
   handleDisconnect(client: Socket) {
     this.logger.log(`[+] Client vừa kết nối: ${client.id}`);
@@ -103,7 +104,7 @@ export class MeetingGateway
       transportId: string;
       kind: 'audio' | 'video';
       rtpParameters: RtpParameters;
-      appData: { roomId: string; userId: string; [key: string]: unknown };
+      appData: { roomId: string; userId: string;[key: string]: unknown };
     },
     @ConnectedSocket() client: Socket,
   ) {
@@ -117,6 +118,8 @@ export class MeetingGateway
       appData: { ...data.appData, peerId: client.id },
     });
 
+    this.producers.set(producer.id, producer);
+
     const userProducers = this.clientProducers.get(client.id) || [];
     this.clientProducers.set(client.id, [...userProducers, producer.id]);
 
@@ -127,6 +130,24 @@ export class MeetingGateway
       userId: data.appData.userId,
     });
     return { id: producer.id };
+  }
+
+  @SubscribeMessage('closeProducer')
+  async handleCloseProducer(
+    @MessageBody() data: { roomId: string; producerId: string },
+    @ConnectedSocket() client: Socket,) {
+    const producer = this.producers.get(data.producerId);
+    if (producer) {
+      producer.close();
+      this.producers.delete(data.producerId);
+
+      client.to(data.roomId).emit('producerClosed', {
+        socketId: client.id,
+        producerId: data.producerId
+      });
+      return { closed: true };
+    }
+    return { closed: false, error: 'Producer not found' };
   }
 
   @SubscribeMessage('consume')
