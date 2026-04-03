@@ -1,0 +1,1 @@
+Compare the current branch with develop and then generate the new pull request description in English follow this template @PULL_REQUEST_TEMPLATE.md so that I can create a new pull request on GitHub to the "develop" branch.

@@ -5,9 +5,13 @@ import { AuthModule } from './Modules/auth/auth.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MeetingModule } from './Modules/meeting/meeting.module';
+import { RedisModule } from './Modules/redis/redis.module';
+import { SocketModule } from './Modules/socket/socket.module';
+import { MediasoupModule } from './Modules/mediasoup/mediasoup.module';
 
 @Module({
   imports: [
+    RedisModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -27,8 +31,10 @@ import { MeetingModule } from './Modules/meeting/meeting.module';
     }),
     AuthModule,
     MeetingModule,
+    MediasoupModule,
+    SocketModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
