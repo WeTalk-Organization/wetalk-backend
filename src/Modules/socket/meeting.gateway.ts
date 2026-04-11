@@ -49,7 +49,7 @@ export class MeetingGateway
   ) {}
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`[+] Client vừa kết nối: ${client.id}`);
+    this.logger.log(`[-] Client vừa ngắt kết nối: ${client.id}`);
     const roomId = this.socketToRoom.get(client.id);
     const user = this.socketToUser.get(client.id);
 
@@ -72,6 +72,44 @@ export class MeetingGateway
       this.socketToRoom.delete(client.id);
       this.socketToUser.delete(client.id);
     }
+
+    // ✅ Cleanup producers
+    const producerIds = this.clientProducers.get(client.id) ?? [];
+    for (const producerId of producerIds) {
+      const producer = this.producers.get(producerId);
+      if (producer && !producer.closed) {
+        producer.close();
+        if (roomId) {
+          this.server.to(roomId).emit('producerClosed', {
+            socketId: client.id,
+            producerId,
+          });
+        }
+      }
+      this.producers.delete(producerId);
+    }
+    this.clientProducers.delete(client.id);
+
+    // ✅ Cleanup consumers
+    const consumerIds = this.clientConsumers.get(client.id) ?? [];
+    for (const consumerId of consumerIds) {
+      const consumer = this.consumers.get(consumerId);
+      if (consumer && !consumer.closed) {
+        consumer.close();
+      }
+      this.consumers.delete(consumerId);
+    }
+    this.clientConsumers.delete(client.id);
+
+    // ✅ Cleanup transports
+    const transportIds = this.clientTransports.get(client.id) ?? [];
+    for (const transportId of transportIds) {
+      const transport = this.mediasoupService.getTransport(transportId);
+      if (transport && !transport.closed) {
+        transport.close();
+      }
+    }
+    this.clientTransports.delete(client.id);
   }
   handleConnection(client: Socket) {
     this.logger.log(`[+] Client vừa kết nối: ${client.id}`);
@@ -91,7 +129,28 @@ export class MeetingGateway
       socketId: client.id,
       user: data.user,
     });
-    return { joined: true };
+
+    const existingProducers: {
+      producerId: string;
+      socketId: string;
+      userId: string;
+    }[] = [];
+
+    for (const [socketId, producerIds] of this.clientProducers.entries()) {
+      if (socketId == client.id) continue;
+      for (const producerId of producerIds) {
+        const producer = this.producers.get(producerId);
+        if (producer && !producer.closed) {
+          const socketUser = this.socketToUser.get(socketId);
+          existingProducers.push({
+            producerId,
+            socketId,
+            userId: socketUser?.id ?? '',
+          });
+        }
+      }
+    }
+    return { joined: true, existingProducers };
   }
 
   @SubscribeMessage('getRouterRtpCapabilities')
@@ -249,6 +308,40 @@ export class MeetingGateway
     }
   }
 
+  @SubscribeMessage('pauseProducer')
+  async handlePauseProducer(
+    @MessageBody() data: { roomId: string; producerId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const producer = this.producers.get(data.producerId);
+    if (producer) {
+      await producer.pause();
+      client.to(data.roomId).emit('producerPaused', {
+        socketId: client.id,
+        producerId: data.producerId,
+      });
+      return { paused: true };
+    }
+    return { paused: false, error: 'Producer not found' };
+  }
+
+  @SubscribeMessage('resumeProducer')
+  async handleResumeProducer(
+    @MessageBody() data: { roomId: string; producerId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const producer = this.producers.get(data.producerId);
+    if (producer) {
+      await producer.resume();
+      client.to(data.roomId).emit('producerResumed', {
+        socketId: client.id,
+        producerId: data.producerId,
+      });
+      return { resumed: true };
+    }
+    return { resumed: false, error: 'Producer not found' };
+  }
+
   @SubscribeMessage('resumeConsumer')
   async handleResumeConsumer(
     @MessageBody() data: { transportId: string; consumerId: string },
@@ -259,6 +352,5 @@ export class MeetingGateway
       return { resumed: true };
     }
     return { error: 'Không tìm thấy băng hình để Play' };
-    return { resumed: true };
   }
 }
