@@ -351,6 +351,23 @@ export class MeetingGateway
       await consumer.resume();
       return { resumed: true };
     }
-    return { error: 'Không tìm thấy băng hình để Play' };
+    return { error: 'No video found to play' };
+  }
+
+  @SubscribeMessage('send-chat-message')
+  handleSendChatMessage(
+    @MessageBody() data: { roomId: string; message: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user = this.socketToUser.get(client.id);
+    if (!user) return { error: 'User not found' };
+    const chatMessage = {
+      id: Date.now().toString(),
+      sender: user,
+      message: data.message,
+      timestamp: new Date().toISOString(),
+    };
+    client.to(data.roomId).emit('receive-chat-message', chatMessage);
+    return { success: true, chatMessage };
   }
 }
