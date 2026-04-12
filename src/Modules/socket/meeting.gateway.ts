@@ -370,4 +370,21 @@ export class MeetingGateway
     client.to(data.roomId).emit('receive-chat-message', chatMessage);
     return { success: true, chatMessage };
   }
+
+  @SubscribeMessage('send-reaction')
+  handleSendReaction(
+    @MessageBody() data: { roomId: string; reaction: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user = this.socketToUser.get(client.id);
+    if (!user) return { error: 'User not found' };
+    const reactionPayload = {
+      id: Date.now().toString(),
+      sender: user,
+      reaction: data.reaction,
+      timestamp: new Date().toISOString(),
+    };
+    this.server.to(data.roomId).emit('receive-reaction', reactionPayload);
+    return { success: true, reactionPayload };
+  }
 }
