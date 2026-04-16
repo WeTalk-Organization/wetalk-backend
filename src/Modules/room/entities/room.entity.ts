@@ -8,8 +8,8 @@ import {
   JoinColumn,
 } from 'typeorm';
 
-@Entity('meetings')
-export class Meeting {
+@Entity('rooms')
+export class Room {
   @PrimaryGeneratedColumn('uuid')
   id: string;
   @Column({ unique: true })

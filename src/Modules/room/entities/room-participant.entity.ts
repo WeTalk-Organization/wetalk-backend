@@ -6,20 +6,20 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { Meeting } from './meeting.entity';
+import { Room } from './room.entity';
 import { User } from 'src/Modules/auth/entities/user.entity';
 
-@Entity('meeting_participants')
-export class MeetingParticipant {
+@Entity('room_participants')
+export class RoomParticipant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
-  meetingId: string;
+  roomId: string;
 
-  @ManyToOne(() => Meeting)
-  @JoinColumn({ name: 'meetingId' })
-  meeting: Meeting;
+  @ManyToOne(() => Room)
+  @JoinColumn({ name: 'roomId' })
+  room: Room;
 
   @Column()
   userId: string;

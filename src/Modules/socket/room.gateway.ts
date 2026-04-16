@@ -25,9 +25,7 @@ import { SocketUser } from './interfaces/socket.interface';
     origin: '*',
   },
 })
-export class MeetingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Lưu các cổng kết nối (Transport) mà 1 User đang có: <socketId, transportId[]>
   private clientTransports = new Map<string, string[]>();
   // Lưu Camera/Mic (Producer) của 1 User đang phát: <socketId, producerId[]>
@@ -41,7 +39,7 @@ export class MeetingGateway
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(MeetingGateway.name);
+  private readonly logger = new Logger(RoomGateway.name);
 
   constructor(
     private readonly mediasoupService: MediasoupService,

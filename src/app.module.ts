@@ -4,7 +4,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './Modules/auth/auth.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { MeetingModule } from './Modules/meeting/meeting.module';
+import { RoomModule } from './Modules/room/room.module';
 import { RedisModule } from './Modules/redis/redis.module';
 import { SocketModule } from './Modules/socket/socket.module';
 import { MediasoupModule } from './Modules/mediasoup/mediasoup.module';
@@ -30,7 +30,7 @@ import { MediasoupModule } from './Modules/mediasoup/mediasoup.module';
       inject: [ConfigService],
     }),
     AuthModule,
-    MeetingModule,
+    RoomModule,
     MediasoupModule,
     SocketModule,
   ],

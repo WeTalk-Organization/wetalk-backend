@@ -1,4 +1,4 @@
-export class MeetingResponseDto {
+export class RoomResponseDto {
   id: string;
   roomId: string;
   hostId: string;

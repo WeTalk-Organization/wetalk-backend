@@ -1,11 +1,11 @@
 import { Global, Module } from '@nestjs/common';
-import { MeetingGateway } from './meeting.gateway';
+import { RoomGateway } from './room.gateway';
 import { MediasoupModule } from '../mediasoup/mediasoup.module';
 
 @Global()
 @Module({
   imports: [MediasoupModule],
-  providers: [MeetingGateway],
-  exports: [MeetingGateway],
+  providers: [RoomGateway],
+  exports: [RoomGateway],
 })
 export class SocketModule {}

@@ -18,11 +18,11 @@ export class RedisService implements OnModuleDestroy {
     this.redisClient.disconnect();
   }
 
-  // --- Các hàm tiện ích cho Meeting ---
+  // --- Các hàm tiện ích cho Room ---
 
   // 1. Thêm một người vào phòng (Sử dụng Redis Hash to store user data)
   async addParticipant(roomId: string, user: IParticipant): Promise<void> {
-    const key = `meeting:${roomId}:participants`;
+    const key = `room:${roomId}:participants`;
 
     // Lưu data user dưới dạng JSON string. Field là userId.
     await this.redisClient.hset(key, user.userId, JSON.stringify(user));
@@ -34,18 +34,18 @@ export class RedisService implements OnModuleDestroy {
 
   // 2. Xóa một người khỏi phòng
   async removeParticipant(roomId: string, userId: string): Promise<void> {
-    const key = `meeting:${roomId}:participants`;
+    const key = `room:${roomId}:participants`;
     await this.redisClient.hdel(key, userId);
   }
 
   async clearRoom(roomId: string): Promise<void> {
-    const key = `meeting:${roomId}:participants`;
+    const key = `room:${roomId}:participants`;
     await this.redisClient.del(key);
   }
 
   // 3. Lấy toàn bộ người dùng đang online trong 1 phòng
   async getParticipants(roomId: string): Promise<IParticipant[]> {
-    const key = `meeting:${roomId}:participants`;
+    const key = `room:${roomId}:participants`;
     const data = await this.redisClient.hgetall(key);
 
     // Biến object { userId: '{"userId":"...","firstName":"..."}' } thành mảng objects

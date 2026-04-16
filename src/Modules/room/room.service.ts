@@ -1,29 +1,29 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Meeting } from './entities/meeting.entity';
+import { Room } from './entities/room.entity';
 import { v4 as uuidv4 } from 'uuid';
-import { MeetingResponseDto } from './dto/meeting-response.dto';
-import { MeetingParticipant } from './entities/meeting-participant.entity';
+import { RoomResponseDto } from './dto/room-response.dto';
+import { RoomParticipant } from './entities/room-participant.entity';
 import { RedisService } from '../redis/redis.service';
 import type { JwtPayload } from '../auth/interfaces/auth.interface';
 
 @Injectable()
-export class MeetingService {
+export class RoomService {
   constructor(
-    @InjectRepository(Meeting)
-    private meetingRepo: Repository<Meeting>,
-    @InjectRepository(MeetingParticipant)
-    private participantRepo: Repository<MeetingParticipant>,
+    @InjectRepository(Room)
+    private roomRepo: Repository<Room>,
+    @InjectRepository(RoomParticipant)
+    private participantRepo: Repository<RoomParticipant>,
     private redisService: RedisService,
   ) {}
 
-  async create(hostId: string): Promise<MeetingResponseDto> {
-    const meeting = this.meetingRepo.create({
+  async create(hostId: string): Promise<RoomResponseDto> {
+    const room = this.roomRepo.create({
       hostId,
       roomId: uuidv4().slice(0, 8),
     });
-    const saved = await this.meetingRepo.save(meeting);
+    const saved = await this.roomRepo.save(room);
     return {
       id: saved.id,
       roomId: saved.roomId,
@@ -33,46 +33,42 @@ export class MeetingService {
     };
   }
 
-  async findByRoomId(roomId: string): Promise<MeetingResponseDto> {
-    const meeting = await this.meetingRepo.findOne({
+  async findByRoomId(roomId: string): Promise<RoomResponseDto> {
+    const room = await this.roomRepo.findOne({
       where: { roomId, isActive: true },
       relations: ['host'],
     });
-    if (!meeting) {
-      throw new NotFoundException(
-        'The meeting room does not exist or has ended.',
-      );
+    if (!room) {
+      throw new NotFoundException('The room does not exist or has ended.');
     }
     return {
-      id: meeting.id,
-      roomId: meeting.roomId,
-      hostId: meeting.hostId,
-      isActive: meeting.isActive,
-      createdAt: meeting.createdAt,
+      id: room.id,
+      roomId: room.roomId,
+      hostId: room.hostId,
+      isActive: room.isActive,
+      createdAt: room.createdAt,
     };
   }
 
-  async joinMeeting(
+  async joinRoom(
     roomId: string,
     userPayload: JwtPayload,
-  ): Promise<MeetingResponseDto> {
+  ): Promise<RoomResponseDto> {
     const userId = userPayload.id;
-    const meeting = await this.meetingRepo.findOne({
+    const room = await this.roomRepo.findOne({
       where: { roomId, isActive: true },
     });
 
-    if (!meeting) {
-      throw new NotFoundException(
-        'The meeting room does not exist or has ended.',
-      );
+    if (!room) {
+      throw new NotFoundException('The room does not exist or has ended.');
     }
     //sql
     let participant = await this.participantRepo.findOne({
-      where: { meetingId: meeting.id, userId, isActive: true },
+      where: { roomId: room.id, userId, isActive: true },
     });
     if (!participant) {
       participant = this.participantRepo.create({
-        meetingId: meeting.id,
+        roomId: room.id,
         userId: userId,
         isActive: true,
       });
@@ -91,11 +87,11 @@ export class MeetingService {
     const activeParticipants = await this.redisService.getParticipants(roomId);
 
     return {
-      id: meeting.id,
-      roomId: meeting.roomId,
-      hostId: meeting.hostId,
-      isActive: meeting.isActive,
-      createdAt: meeting.createdAt,
+      id: room.id,
+      roomId: room.roomId,
+      hostId: room.hostId,
+      isActive: room.isActive,
+      createdAt: room.createdAt,
       participants: activeParticipants.map((p) => ({
         userId: p.userId,
         joinedAt: new Date(p.joinedAt as string | Date),
@@ -106,21 +102,21 @@ export class MeetingService {
     };
   }
 
-  async leaveMeeting(
+  async leaveRoom(
     roomId: string,
     userId: string,
-  ): Promise<{ message: string; isMeetingEnded: boolean }> {
-    const meeting = await this.meetingRepo.findOne({
+  ): Promise<{ message: string; isRoomEnded: boolean }> {
+    const room = await this.roomRepo.findOne({
       where: { roomId, isActive: true },
     });
 
-    if (!meeting) {
-      throw new NotFoundException('The meeting room does not exist.');
+    if (!room) {
+      throw new NotFoundException('The room does not exist.');
     }
 
     //sql
     const participant = await this.participantRepo.findOne({
-      where: { meetingId: meeting.id, userId, isActive: true },
+      where: { roomId: room.id, userId, isActive: true },
     });
 
     if (participant) {
@@ -129,15 +125,15 @@ export class MeetingService {
       await this.participantRepo.save(participant);
     }
 
-    if (meeting.hostId === userId) {
-      meeting.isActive = false;
-      meeting.endedAt = new Date();
-      await this.meetingRepo.save(meeting);
+    if (room.hostId === userId) {
+      room.isActive = false;
+      room.endedAt = new Date();
+      await this.roomRepo.save(room);
       await this.redisService.clearRoom(roomId);
-      return { message: 'Meeting ended.', isMeetingEnded: true };
+      return { message: 'Room ended.', isRoomEnded: true };
     }
     //redis
     await this.redisService.removeParticipant(roomId, userId);
-    return { message: 'Successfully left the meeting.', isMeetingEnded: false };
+    return { message: 'Successfully left the room.', isRoomEnded: false };
   }
 }
