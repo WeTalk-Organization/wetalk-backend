@@ -385,4 +385,23 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(data.roomId).emit('receive-reaction', reactionPayload);
     return { success: true, reactionPayload };
   }
+
+  emitKickToUser(targetUserId: string, roomId: string) {
+    for (const [socketId, user] of this.socketToUser.entries()) {
+      if (user.id === targetUserId) {
+        const targetSocket = this.server.sockets.sockets.get(socketId);
+        if (targetSocket) {
+          // Gửi một tin nhắn cuối báo người đó bị đuổi
+          targetSocket.emit('you-were-kicked');
+
+          // Cắt đứng kết nối sau 500ms để dọn sạch tài nguyên máy chủ
+          setTimeout(() => {
+            targetSocket.disconnect(true);
+          }, 500);
+        }
+        break;
+      }
+    }
+    this.server.to(roomId).emit('participant-kicked', { userId: targetUserId });
+  }
 }

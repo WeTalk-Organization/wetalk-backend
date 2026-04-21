@@ -45,4 +45,23 @@ export class RoomController {
     }
     return result;
   }
+
+  @Post(':roomId/kick/:targetUserId')
+  @UseGuards(JwtAuthGuard)
+  async kickParticipant(
+    @Param('roomId') roomId: string,
+    @Param('targetUserId') targetUserId: string,
+    @Req() req: Request,
+  ) {
+    const host = req.user as JwtPayload;
+    const result = await this.roomService.kickParticipant(
+      roomId,
+      host.id,
+      targetUserId,
+    );
+    if (result.kicked) {
+      this.roomGateway.emitKickToUser(targetUserId, roomId);
+    }
+    return result;
+  }
 }

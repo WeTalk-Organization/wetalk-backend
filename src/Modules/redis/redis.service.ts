@@ -53,4 +53,14 @@ export class RedisService implements OnModuleDestroy {
       (userStr) => JSON.parse(userStr) as IParticipant,
     );
   }
+  async addToBlackList(roomId: string, userId: string): Promise<void> {
+    const key = `room:${roomId}:blacklist`;
+    await this.redisClient.sadd(key, userId);
+    await this.redisClient.expire(key, 86400);
+  }
+  async isBlacklisted(roomId: string, userId: string): Promise<boolean> {
+    const key = `room:${roomId}:blacklist`;
+    const result = await this.redisClient.sismember(key, userId);
+    return result === 1;
+  }
 }

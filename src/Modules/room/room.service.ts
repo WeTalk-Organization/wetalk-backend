@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Room } from './entities/room.entity';
@@ -61,6 +66,10 @@ export class RoomService {
 
     if (!room) {
       throw new NotFoundException('The room does not exist or has ended.');
+    }
+    const blacklisted = await this.redisService.isBlacklisted(roomId, userId);
+    if (blacklisted) {
+      throw new ForbiddenException('You are not allowed to access this room.');
     }
     //sql
     let participant = await this.participantRepo.findOne({
@@ -135,5 +144,30 @@ export class RoomService {
     //redis
     await this.redisService.removeParticipant(roomId, userId);
     return { message: 'Successfully left the room.', isRoomEnded: false };
+  }
+
+  async kickParticipant(
+    roomId: string,
+    hostId: string,
+    targetUserId: string,
+  ): Promise<{ kicked: boolean }> {
+    const room = await this.roomRepo.findOne({
+      where: { roomId, isActive: true },
+    });
+    if (!room) {
+      throw new NotFoundException(
+        'The room does not exist or has been taken out.',
+      );
+    }
+    if (room.hostId !== hostId) {
+      throw new ForbiddenException('You do not have the right to kick users.');
+    }
+    if (hostId === targetUserId) {
+      throw new BadRequestException('Cannot kick myself.');
+    }
+
+    await this.redisService.addToBlackList(roomId, targetUserId);
+    await this.redisService.removeParticipant(roomId, targetUserId);
+    return { kicked: true };
   }
 }
