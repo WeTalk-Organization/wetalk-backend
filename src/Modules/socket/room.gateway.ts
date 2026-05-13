@@ -19,6 +19,7 @@ import {
   RtpParameters,
 } from 'mediasoup/types';
 import { SocketUser } from './interfaces/socket.interface';
+import { AiService } from '../ai/ai.service';
 
 @WebSocketGateway({
   cors: {
@@ -44,6 +45,7 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly mediasoupService: MediasoupService,
     private readonly redisService: RedisService,
+    private readonly aiService: AiService,
   ) {}
 
   handleDisconnect(client: Socket) {
@@ -403,5 +405,70 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
     }
     this.server.to(roomId).emit('participant-kicked', { userId: targetUserId });
+  }
+
+  @SubscribeMessage('send-subtitle')
+  async handleSendSubtitle(
+    @MessageBody()
+    data: {
+      roomId: string;
+      audio: Buffer;
+      language?: string;
+    },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user = this.socketToUser.get(client.id);
+    if (!user) return;
+
+    const audioBuffer = Buffer.isBuffer(data.audio)
+      ? data.audio
+      : Buffer.from(data.audio);
+
+    const text = await this.aiService.transcribe(
+      audioBuffer,
+      'audio.webm',
+      data.language,
+    );
+
+    if (!text || !text.trim()) return;
+
+    this.server.to(data.roomId).emit('receive-subtitle', {
+      userId: user.id,
+      text: text.trim(),
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Handler riêng cho trang test / use-case không cần broadcast cả room.
+   * Client gửi : socket.emit('transcribe-audio', { audio: ArrayBuffer, language?: string })
+   * Server trả : socket.emit('transcribe-result', { text: string, timestamp: number })
+   *              → CHỈ về đúng client đã gọi
+   */
+  @SubscribeMessage('transcribe-audio')
+  async handleTranscribeAudio(
+    @MessageBody() data: { audio: Buffer; language?: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const audioBuffer = Buffer.isBuffer(data.audio)
+      ? data.audio
+      : Buffer.from(data.audio);
+
+    this.logger.log(
+      `[Transcribe] from ${client.id} | size=${audioBuffer.byteLength}B | lang=${data.language ?? 'vi'}`,
+    );
+
+    const text = await this.aiService.transcribe(
+      audioBuffer,
+      'audio.webm',
+      data.language,
+    );
+
+    this.logger.log(`[Transcribe] result → "${text ?? '(empty)'}"`);
+
+    client.emit('transcribe-result', {
+      text: text?.trim() ?? '',
+      timestamp: Date.now(),
+    });
   }
 }
