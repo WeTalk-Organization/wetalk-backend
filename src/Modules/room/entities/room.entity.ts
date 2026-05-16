@@ -21,6 +21,14 @@ export class Room {
   hostId: string;
   @Column({ default: true })
   isActive: boolean;
+  @Column({ type: 'text', array: true, nullable: true, default: [] })
+  topics: string[];
+  @Column({ nullable: true })
+  language: string;
+  @Column({ default: 'Any' })
+  level: string;
+  @Column({ default: 10 })
+  maxParticipants: number;
   @Column({ type: 'timestamp', nullable: true })
   endedAt: Date | null;
   @CreateDateColumn()

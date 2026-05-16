@@ -1,10 +1,21 @@
-import { Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { RoomService } from './room.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { Request } from 'express';
 import type { JwtPayload } from '../auth/interfaces/auth.interface';
 import { RoomResponseDto } from './dto/room-response.dto';
 import { RoomGateway } from '../socket/room.gateway';
+import { PaginatedRoomListDto } from './dto/room-list.dto';
+import { CreateRoomDto } from './dto/create-room.dto';
 
 @Controller('room')
 export class RoomController {
@@ -15,10 +26,30 @@ export class RoomController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  create(@Req() req: Request): Promise<RoomResponseDto> {
+  create(
+    @Req() req: Request,
+    @Body() dto: CreateRoomDto,
+  ): Promise<RoomResponseDto> {
     const user = req.user as JwtPayload;
-    return this.roomService.create(user.id);
+    return this.roomService.create(user.id, dto);
   }
+
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  getAllActive(
+    @Query('page') page = '1',
+    @Query('limit') limit = '15',
+    @Query('language') language?: string,
+    @Query('level') level?: string,
+  ): Promise<PaginatedRoomListDto> {
+    return this.roomService.findAllActive(
+      Number(page),
+      Number(limit),
+      language,
+      level,
+    );
+  }
+
   @Get(':roomId')
   @UseGuards(JwtAuthGuard)
   getRoom(@Param('roomId') roomId: string): Promise<RoomResponseDto | null> {

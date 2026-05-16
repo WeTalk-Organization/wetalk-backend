@@ -1,10 +1,15 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
 import type { GoogleUser, JwtPayload } from './interfaces/auth.interface';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +18,7 @@ export class AuthService {
     private configService: ConfigService,
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
   async googleLogin(googleUser: GoogleUser) {
@@ -71,5 +77,40 @@ export class AuthService {
         'The refresh token is invalid or has expired.',
       );
     }
+  }
+
+  async updateProfile(
+    userId: string,
+    data: { firstName?: string; lastName?: string },
+    file?: Express.Multer.File,
+  ) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (data.firstName) user.firstName = data.firstName;
+    if (data.lastName) user.lastName = data.lastName;
+
+    if (file) {
+      const uploadResult = await this.cloudinaryService.uploadImage(file);
+      user.picture = uploadResult.secure_url;
+    }
+
+    await this.userRepo.save(user);
+
+    const payload: JwtPayload = {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatar: user.picture,
+    };
+
+    return {
+      message: 'Profile updated successfully',
+      user: payload,
+      accessToken: this.jwtService.sign(payload),
+    };
   }
 }

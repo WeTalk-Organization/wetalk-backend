@@ -48,25 +48,55 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly aiService: AiService,
   ) {}
 
-  handleDisconnect(client: Socket) {
-    this.logger.log(`[-] Client vừa ngắt kết nối: ${client.id}`);
+  private cleanupClientResources(client: Socket) {
     const roomId = this.socketToRoom.get(client.id);
     const user = this.socketToUser.get(client.id);
 
     if (roomId) {
-      this.server.to(roomId).emit('user-left', {
-        socketId: client.id,
-        user,
-      });
+      let hasOtherSocket = false;
+      for (const [
+        existingSocketId,
+        existingUser,
+      ] of this.socketToUser.entries()) {
+        if (
+          existingSocketId !== client.id &&
+          existingUser.id === user?.id &&
+          this.socketToRoom.get(existingSocketId) === roomId
+        ) {
+          hasOtherSocket = true;
+          break;
+        }
+      }
 
-      if (user && user.id) {
-        void this.redisService
-          .removeParticipant(roomId, user.id)
-          .catch((err: unknown) => {
-            this.logger.error(
-              `Error removing participant from redis: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          });
+      if (!hasOtherSocket) {
+        this.server.to(roomId).emit('user-left', {
+          socketId: client.id,
+          user,
+        });
+
+        if (user && user.id) {
+          void this.redisService
+            .removeParticipant(roomId, user.id)
+            .then(async () => {
+              const activeParticipants =
+                await this.redisService.getParticipants(roomId);
+              this.server.to('lobby').emit('room-updated', {
+                roomId,
+                participantCount: activeParticipants.length,
+                participants: activeParticipants.map((p) => ({
+                  userId: p.userId,
+                  firstName: p.firstName || '',
+                  lastName: p.lastName || '',
+                  avatar: p.avatar || '',
+                })),
+              });
+            })
+            .catch((err: unknown) => {
+              this.logger.error(
+                `Error removing participant from redis: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            });
+        }
       }
 
       this.socketToRoom.delete(client.id);
@@ -111,6 +141,25 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     this.clientTransports.delete(client.id);
   }
+
+  handleDisconnect(client: Socket) {
+    this.logger.log(`[-] Client vừa ngắt kết nối: ${client.id}`);
+    this.cleanupClientResources(client);
+  }
+
+  @SubscribeMessage('leave-room')
+  handleLeaveRoomMessage(
+    @MessageBody() data: { roomId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const roomId = this.socketToRoom.get(client.id);
+    if (roomId === data.roomId) {
+      void client.leave(roomId);
+      this.cleanupClientResources(client);
+      return { success: true };
+    }
+    return { success: false, message: 'Not in room' };
+  }
   handleConnection(client: Socket) {
     this.logger.log(`[+] Client vừa kết nối: ${client.id}`);
   }
@@ -120,15 +169,34 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { roomId: string; user: SocketUser },
     @ConnectedSocket() client: Socket,
   ) {
+    let hasOtherSocket = false;
+    for (const [
+      existingSocketId,
+      existingUser,
+    ] of this.socketToUser.entries()) {
+      if (existingUser.id === data.user.id && existingSocketId !== client.id) {
+        hasOtherSocket = true;
+        const targetSocket = this.server.sockets.sockets.get(existingSocketId);
+        if (targetSocket) {
+          targetSocket.emit('duplicate-login-kicked');
+          setTimeout(() => {
+            targetSocket.disconnect(true);
+          }, 500);
+        }
+      }
+    }
+
     void client.join(data.roomId);
 
     this.socketToRoom.set(client.id, data.roomId);
     this.socketToUser.set(client.id, data.user);
 
-    client.to(data.roomId).emit('user-joined', {
-      socketId: client.id,
-      user: data.user,
-    });
+    if (!hasOtherSocket) {
+      client.to(data.roomId).emit('user-joined', {
+        socketId: client.id,
+        user: data.user,
+      });
+    }
 
     const existingProducers: {
       producerId: string;
