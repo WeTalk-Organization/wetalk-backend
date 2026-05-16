@@ -2,11 +2,15 @@ import {
   Body,
   Controller,
   Get,
+  Patch,
   Post,
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -49,5 +53,17 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   getProfile(@Req() req: Request): JwtPayload {
     return req.user as JwtPayload;
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('avatar'))
+  async updateProfile(
+    @Req() req: Request,
+    @Body() body: { firstName?: string; lastName?: string },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    const user = req.user as JwtPayload;
+    return this.authService.updateProfile(user.id, body, file);
   }
 }

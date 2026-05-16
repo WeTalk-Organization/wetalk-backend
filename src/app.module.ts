@@ -8,9 +8,11 @@ import { RoomModule } from './Modules/room/room.module';
 import { RedisModule } from './Modules/redis/redis.module';
 import { SocketModule } from './Modules/socket/socket.module';
 import { MediasoupModule } from './Modules/mediasoup/mediasoup.module';
+import { CloudinaryModule } from './Modules/cloudinary/cloudinary.module';
 
 @Module({
   imports: [
+    CloudinaryModule,
     RedisModule,
     ConfigModule.forRoot({
       isGlobal: true,

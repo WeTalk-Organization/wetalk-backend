@@ -5,13 +5,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindOptionsWhere } from 'typeorm';
 import { Room } from './entities/room.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { RoomResponseDto } from './dto/room-response.dto';
 import { RoomParticipant } from './entities/room-participant.entity';
 import { RedisService } from '../redis/redis.service';
 import type { JwtPayload } from '../auth/interfaces/auth.interface';
+import { PaginatedRoomListDto } from './dto/room-list.dto';
+import { CreateRoomDto } from './dto/create-room.dto';
+import { LobbyGateway } from '../socket/lobby.gateway';
 
 @Injectable()
 export class RoomService {
@@ -21,18 +24,94 @@ export class RoomService {
     @InjectRepository(RoomParticipant)
     private participantRepo: Repository<RoomParticipant>,
     private redisService: RedisService,
+    private lobbyGateway: LobbyGateway,
   ) {}
 
-  async create(hostId: string): Promise<RoomResponseDto> {
+  async findAllActive(
+    page: number,
+    limit: number,
+    language?: string,
+    level?: string,
+  ): Promise<PaginatedRoomListDto> {
+    const whereCondition: FindOptionsWhere<Room> = { isActive: true };
+
+    if (language) {
+      whereCondition.language = language;
+    }
+
+    if (level && level !== 'Any') {
+      whereCondition.level = level;
+    }
+
+    const [rooms, total] = await this.roomRepo.findAndCount({
+      where: whereCondition,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const data = await Promise.all(
+      rooms.map(async (room) => {
+        const participants = await this.redisService.getParticipants(
+          room.roomId,
+        );
+        return {
+          roomId: room.roomId,
+          hostId: room.hostId,
+          topics: room.topics,
+          language: room.language,
+          level: room.level,
+          maxParticipants: room.maxParticipants,
+          createdAt: room.createdAt,
+          participantCount: participants.length,
+          participants: participants.map((p) => ({
+            userId: p.userId,
+            firstName: p.firstName || '',
+            lastName: p.lastName || '',
+            avatar: p.avatar || '',
+          })),
+        };
+      }),
+    );
+
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async create(hostId: string, dto: CreateRoomDto): Promise<RoomResponseDto> {
     const room = this.roomRepo.create({
       hostId,
       roomId: uuidv4().slice(0, 8),
+      topics: dto.topics,
+      language: dto.language,
+      level: dto.level,
+      maxParticipants: dto.maxParticipants,
     });
     const saved = await this.roomRepo.save(room);
+    const roomDataForLobby = {
+      roomId: saved.roomId,
+      hostId: saved.hostId,
+      topics: saved.topics,
+      language: saved.language,
+      level: saved.level,
+      maxParticipants: saved.maxParticipants,
+      createdAt: saved.createdAt,
+      participantCount: 0,
+      participants: [],
+    };
+    this.lobbyGateway.server.to('lobby').emit('room-created', roomDataForLobby);
     return {
       id: saved.id,
       roomId: saved.roomId,
       hostId: saved.hostId,
+      topics: saved.topics,
+      language: saved.language,
+      level: saved.level,
+      maxParticipants: saved.maxParticipants,
       isActive: saved.isActive,
       createdAt: saved.createdAt,
     };
@@ -50,6 +129,10 @@ export class RoomService {
       id: room.id,
       roomId: room.roomId,
       hostId: room.hostId,
+      topics: room.topics,
+      language: room.language,
+      level: room.level,
+      maxParticipants: room.maxParticipants,
       isActive: room.isActive,
       createdAt: room.createdAt,
     };
@@ -95,10 +178,25 @@ export class RoomService {
     await this.redisService.addParticipant(roomId, participantCacheData);
     const activeParticipants = await this.redisService.getParticipants(roomId);
 
+    this.lobbyGateway.server.to('lobby').emit('room-updated', {
+      roomId,
+      participantCount: activeParticipants.length,
+      participants: activeParticipants.map((p) => ({
+        userId: p.userId,
+        firstName: p.firstName || '',
+        lastName: p.lastName || '',
+        avatar: p.avatar || '',
+      })),
+    });
+
     return {
       id: room.id,
       roomId: room.roomId,
       hostId: room.hostId,
+      topics: room.topics,
+      language: room.language,
+      level: room.level,
+      maxParticipants: room.maxParticipants,
       isActive: room.isActive,
       createdAt: room.createdAt,
       participants: activeParticipants.map((p) => ({
@@ -139,10 +237,24 @@ export class RoomService {
       room.endedAt = new Date();
       await this.roomRepo.save(room);
       await this.redisService.clearRoom(roomId);
+      this.lobbyGateway.server.to('lobby').emit('room-deleted', { roomId });
       return { message: 'Room ended.', isRoomEnded: true };
     }
     //redis
     await this.redisService.removeParticipant(roomId, userId);
+
+    const activeParticipants = await this.redisService.getParticipants(roomId);
+    this.lobbyGateway.server.to('lobby').emit('room-updated', {
+      roomId,
+      participantCount: activeParticipants.length,
+      participants: activeParticipants.map((p) => ({
+        userId: p.userId,
+        firstName: p.firstName || '',
+        lastName: p.lastName || '',
+        avatar: p.avatar || '',
+      })),
+    });
+
     return { message: 'Successfully left the room.', isRoomEnded: false };
   }
 
@@ -168,6 +280,19 @@ export class RoomService {
 
     await this.redisService.addToBlackList(roomId, targetUserId);
     await this.redisService.removeParticipant(roomId, targetUserId);
+
+    const activeParticipants = await this.redisService.getParticipants(roomId);
+    this.lobbyGateway.server.to('lobby').emit('room-updated', {
+      roomId,
+      participantCount: activeParticipants.length,
+      participants: activeParticipants.map((p) => ({
+        userId: p.userId,
+        firstName: p.firstName || '',
+        lastName: p.lastName || '',
+        avatar: p.avatar || '',
+      })),
+    });
+
     return { kicked: true };
   }
 }
