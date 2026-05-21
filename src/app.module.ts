@@ -9,6 +9,7 @@ import { RedisModule } from './Modules/redis/redis.module';
 import { SocketModule } from './Modules/socket/socket.module';
 import { MediasoupModule } from './Modules/mediasoup/mediasoup.module';
 import { CloudinaryModule } from './Modules/cloudinary/cloudinary.module';
+import { UserModule } from './Modules/user/user.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { CloudinaryModule } from './Modules/cloudinary/cloudinary.module';
     RoomModule,
     MediasoupModule,
     SocketModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
