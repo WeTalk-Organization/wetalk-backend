@@ -20,6 +20,7 @@ import {
 } from 'mediasoup/types';
 import { SocketUser } from './interfaces/socket.interface';
 import { AiService } from '../ai/ai.service';
+import { SocketStateService } from './socket-state.service';
 
 @WebSocketGateway({
   cors: {
@@ -36,7 +37,6 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private consumers = new Map<string, Consumer>();
   private producers = new Map<string, Producer>();
   private socketToRoom = new Map<string, string>();
-  private socketToUser = new Map<string, SocketUser>();
   @WebSocketServer()
   server: Server;
 
@@ -46,18 +46,18 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly mediasoupService: MediasoupService,
     private readonly redisService: RedisService,
     private readonly aiService: AiService,
+    private readonly socketStateService: SocketStateService,
   ) {}
 
   private cleanupClientResources(client: Socket) {
     const roomId = this.socketToRoom.get(client.id);
-    const user = this.socketToUser.get(client.id);
+    const user = this.socketStateService.getUser(client.id);
 
     if (roomId) {
       let hasOtherSocket = false;
-      for (const [
-        existingSocketId,
-        existingUser,
-      ] of this.socketToUser.entries()) {
+      for (const [existingSocketId, existingUser] of this.socketStateService
+        .getAllUsers()
+        .entries()) {
         if (
           existingSocketId !== client.id &&
           existingUser.id === user?.id &&
@@ -100,8 +100,9 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       this.socketToRoom.delete(client.id);
-      this.socketToUser.delete(client.id);
     }
+
+    this.socketStateService.removeUser(client.id);
 
     // ✅ Cleanup producers
     const producerIds = this.clientProducers.get(client.id) ?? [];
@@ -170,10 +171,9 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     let hasOtherSocket = false;
-    for (const [
-      existingSocketId,
-      existingUser,
-    ] of this.socketToUser.entries()) {
+    for (const [existingSocketId, existingUser] of this.socketStateService
+      .getAllUsers()
+      .entries()) {
       if (existingUser.id === data.user.id && existingSocketId !== client.id) {
         hasOtherSocket = true;
         const targetSocket = this.server.sockets.sockets.get(existingSocketId);
@@ -189,7 +189,7 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     void client.join(data.roomId);
 
     this.socketToRoom.set(client.id, data.roomId);
-    this.socketToUser.set(client.id, data.user);
+    this.socketStateService.setUser(client.id, data.user);
 
     if (!hasOtherSocket) {
       client.to(data.roomId).emit('user-joined', {
@@ -209,7 +209,7 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       for (const producerId of producerIds) {
         const producer = this.producers.get(producerId);
         if (producer && !producer.closed) {
-          const socketUser = this.socketToUser.get(socketId);
+          const socketUser = this.socketStateService.getUser(socketId);
           existingProducers.push({
             producerId,
             socketId,
@@ -427,7 +427,7 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { roomId: string; message: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const user = this.socketToUser.get(client.id);
+    const user = this.socketStateService.getUser(client.id);
     if (!user) return { error: 'User not found' };
     const chatMessage = {
       id: Date.now().toString(),
@@ -444,7 +444,7 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { roomId: string; reaction: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const user = this.socketToUser.get(client.id);
+    const user = this.socketStateService.getUser(client.id);
     if (!user) return { error: 'User not found' };
     const reactionPayload = {
       id: Date.now().toString(),
@@ -457,7 +457,9 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   emitKickToUser(targetUserId: string, roomId: string) {
-    for (const [socketId, user] of this.socketToUser.entries()) {
+    for (const [socketId, user] of this.socketStateService
+      .getAllUsers()
+      .entries()) {
       if (user.id === targetUserId) {
         const targetSocket = this.server.sockets.sockets.get(socketId);
         if (targetSocket) {
@@ -485,7 +487,7 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     },
     @ConnectedSocket() client: Socket,
   ) {
-    const user = this.socketToUser.get(client.id);
+    const user = this.socketStateService.getUser(client.id);
     if (!user) return;
 
     const audioBuffer = Buffer.isBuffer(data.audio)
