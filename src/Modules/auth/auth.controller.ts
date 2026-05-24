@@ -60,7 +60,7 @@ export class AuthController {
   @UseInterceptors(FileInterceptor('avatar'))
   async updateProfile(
     @Req() req: Request,
-    @Body() body: { firstName?: string; lastName?: string },
+    @Body() body: { firstName?: string; lastName?: string; bio?: string },
     @UploadedFile() file?: Express.Multer.File,
   ) {
     const user = req.user as JwtPayload;

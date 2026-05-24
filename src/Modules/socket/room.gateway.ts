@@ -102,8 +102,6 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.socketToRoom.delete(client.id);
     }
 
-    this.socketStateService.removeUser(client.id);
-
     // ✅ Cleanup producers
     const producerIds = this.clientProducers.get(client.id) ?? [];
     for (const producerId of producerIds) {
@@ -189,7 +187,6 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     void client.join(data.roomId);
 
     this.socketToRoom.set(client.id, data.roomId);
-    this.socketStateService.setUser(client.id, data.user);
 
     if (!hasOtherSocket) {
       client.to(data.roomId).emit('user-joined', {

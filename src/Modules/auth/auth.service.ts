@@ -45,6 +45,7 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       avatar: user.picture,
+      bio: user.bio,
     };
 
     return {
@@ -68,6 +69,7 @@ export class AuthService {
         firstName: payload.firstName,
         lastName: payload.lastName,
         avatar: payload.avatar,
+        bio: payload.bio,
       };
       return {
         accessToken: this.jwtService.sign(newPayload),
@@ -81,7 +83,7 @@ export class AuthService {
 
   async updateProfile(
     userId: string,
-    data: { firstName?: string; lastName?: string },
+    data: { firstName?: string; lastName?: string; bio?: string },
     file?: Express.Multer.File,
   ) {
     const user = await this.userRepo.findOne({ where: { id: userId } });
@@ -91,6 +93,7 @@ export class AuthService {
 
     if (data.firstName) user.firstName = data.firstName;
     if (data.lastName) user.lastName = data.lastName;
+    if (data.bio !== undefined) user.bio = data.bio;
 
     if (file) {
       const uploadResult = await this.cloudinaryService.uploadImage(file);
@@ -105,6 +108,7 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       avatar: user.picture,
+      bio: user.bio,
     };
 
     return {

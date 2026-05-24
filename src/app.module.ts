@@ -10,9 +10,13 @@ import { SocketModule } from './Modules/socket/socket.module';
 import { MediasoupModule } from './Modules/mediasoup/mediasoup.module';
 import { CloudinaryModule } from './Modules/cloudinary/cloudinary.module';
 import { UserModule } from './Modules/user/user.module';
+import { FollowModule } from './Modules/follow/follow.module';
+import { NotificationModule } from './Modules/notification/notification.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
   imports: [
+    EventEmitterModule.forRoot(),
     CloudinaryModule,
     RedisModule,
     ConfigModule.forRoot({
@@ -37,6 +41,8 @@ import { UserModule } from './Modules/user/user.module';
     MediasoupModule,
     SocketModule,
     UserModule,
+    FollowModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

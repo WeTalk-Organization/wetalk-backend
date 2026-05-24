@@ -29,4 +29,18 @@ export class SocketStateService {
     }
     return undefined;
   }
+
+  getSocketIds(userId: string): string[] {
+    const result: string[] = [];
+    for (const [socketId, user] of this.socketToUser.entries()) {
+      if (user.id === userId) {
+        result.push(socketId);
+      }
+    }
+    return result;
+  }
+
+  getOnlineUserIds(): Set<string> {
+    return new Set([...this.socketToUser.values()].map((u) => u.id));
+  }
 }
