@@ -12,4 +12,5 @@ export interface JwtPayload {
   firstName: string;
   lastName: string;
   avatar?: string;
+  bio?: string;
 }

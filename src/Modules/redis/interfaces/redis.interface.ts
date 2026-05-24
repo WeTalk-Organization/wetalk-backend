@@ -4,5 +4,6 @@ export interface IParticipant {
   firstName?: string;
   lastName?: string;
   avatar?: string;
+  bio?: string;
   [key: string]: any; // Vẫn cho phép truyền thêm các thuộc tính khác
 }

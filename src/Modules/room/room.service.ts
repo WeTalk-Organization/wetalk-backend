@@ -69,6 +69,7 @@ export class RoomService {
             firstName: p.firstName || '',
             lastName: p.lastName || '',
             avatar: p.avatar || '',
+            bio: p.bio || '',
           })),
         };
       }),
@@ -174,6 +175,7 @@ export class RoomService {
       firstName: userPayload.firstName,
       lastName: userPayload.lastName,
       avatar: userPayload.avatar,
+      bio: userPayload.bio,
     };
     await this.redisService.addParticipant(roomId, participantCacheData);
     const activeParticipants = await this.redisService.getParticipants(roomId);
@@ -186,6 +188,7 @@ export class RoomService {
         firstName: p.firstName || '',
         lastName: p.lastName || '',
         avatar: p.avatar || '',
+        bio: p.bio || '',
       })),
     });
 
@@ -205,6 +208,7 @@ export class RoomService {
         firstName: p.firstName || '',
         lastName: p.lastName || '',
         avatar: p.avatar || '',
+        bio: p.bio || '',
       })),
     };
   }
@@ -252,6 +256,7 @@ export class RoomService {
         firstName: p.firstName || '',
         lastName: p.lastName || '',
         avatar: p.avatar || '',
+        bio: p.bio || '',
       })),
     });
 
@@ -290,6 +295,7 @@ export class RoomService {
         firstName: p.firstName || '',
         lastName: p.lastName || '',
         avatar: p.avatar || '',
+        bio: p.bio || '',
       })),
     });
 

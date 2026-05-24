@@ -22,6 +22,9 @@ export class User {
   @Column({ nullable: true })
   picture: string;
 
+  @Column({ type: 'text', nullable: true })
+  bio: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }
