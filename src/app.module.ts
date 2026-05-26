@@ -13,10 +13,12 @@ import { UserModule } from './Modules/user/user.module';
 import { FollowModule } from './Modules/follow/follow.module';
 import { NotificationModule } from './Modules/notification/notification.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     CloudinaryModule,
     RedisModule,
     ConfigModule.forRoot({

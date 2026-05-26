@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere } from 'typeorm';
 import { Room } from './entities/room.entity';
@@ -14,7 +15,6 @@ import { RedisService } from '../redis/redis.service';
 import type { JwtPayload } from '../auth/interfaces/auth.interface';
 import { PaginatedRoomListDto } from './dto/room-list.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
-import { LobbyGateway } from '../socket/lobby.gateway';
 
 @Injectable()
 export class RoomService {
@@ -24,7 +24,7 @@ export class RoomService {
     @InjectRepository(RoomParticipant)
     private participantRepo: Repository<RoomParticipant>,
     private redisService: RedisService,
-    private lobbyGateway: LobbyGateway,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   async findAllActive(
@@ -104,7 +104,7 @@ export class RoomService {
       participantCount: 0,
       participants: [],
     };
-    this.lobbyGateway.server.to('lobby').emit('room-created', roomDataForLobby);
+    this.eventEmitter.emit('room.created', roomDataForLobby);
     return {
       id: saved.id,
       roomId: saved.roomId,
@@ -178,9 +178,13 @@ export class RoomService {
       bio: userPayload.bio,
     };
     await this.redisService.addParticipant(roomId, participantCacheData);
+
+    room.lastActivityAt = new Date();
+    await this.roomRepo.save(room);
+
     const activeParticipants = await this.redisService.getParticipants(roomId);
 
-    this.lobbyGateway.server.to('lobby').emit('room-updated', {
+    this.eventEmitter.emit('room.updated', {
       roomId,
       participantCount: activeParticipants.length,
       participants: activeParticipants.map((p) => ({
@@ -237,18 +241,17 @@ export class RoomService {
     }
 
     if (room.hostId === userId) {
-      room.isActive = false;
-      room.endedAt = new Date();
-      await this.roomRepo.save(room);
-      await this.redisService.clearRoom(roomId);
-      this.lobbyGateway.server.to('lobby').emit('room-deleted', { roomId });
+      await this.closeRoomRecord(room);
       return { message: 'Room ended.', isRoomEnded: true };
     }
     //redis
     await this.redisService.removeParticipant(roomId, userId);
 
+    room.lastActivityAt = new Date();
+    await this.roomRepo.save(room);
+
     const activeParticipants = await this.redisService.getParticipants(roomId);
-    this.lobbyGateway.server.to('lobby').emit('room-updated', {
+    this.eventEmitter.emit('room.updated', {
       roomId,
       participantCount: activeParticipants.length,
       participants: activeParticipants.map((p) => ({
@@ -286,8 +289,11 @@ export class RoomService {
     await this.redisService.addToBlackList(roomId, targetUserId);
     await this.redisService.removeParticipant(roomId, targetUserId);
 
+    room.lastActivityAt = new Date();
+    await this.roomRepo.save(room);
+
     const activeParticipants = await this.redisService.getParticipants(roomId);
-    this.lobbyGateway.server.to('lobby').emit('room-updated', {
+    this.eventEmitter.emit('room.updated', {
       roomId,
       participantCount: activeParticipants.length,
       participants: activeParticipants.map((p) => ({
@@ -300,5 +306,55 @@ export class RoomService {
     });
 
     return { kicked: true };
+  }
+
+  @OnEvent('room.participant.disconnected')
+  async handleParticipantDisconnected(payload: {
+    roomId: string;
+    userId: string;
+  }): Promise<void> {
+    const { roomId, userId } = payload;
+
+    await this.redisService.removeParticipant(roomId, userId);
+
+    const room = await this.roomRepo.findOne({
+      where: { roomId, isActive: true },
+    });
+    if (room) {
+      room.lastActivityAt = new Date();
+      await this.roomRepo.save(room);
+    }
+
+    const activeParticipants = await this.redisService.getParticipants(roomId);
+    this.eventEmitter.emit('room.updated', {
+      roomId,
+      participantCount: activeParticipants.length,
+      participants: activeParticipants.map((p) => ({
+        userId: p.userId,
+        firstName: p.firstName || '',
+        lastName: p.lastName || '',
+        avatar: p.avatar || '',
+      })),
+    });
+  }
+
+  async closeRoomRecord(room: Room): Promise<void> {
+    room.isActive = false;
+    room.endedAt = new Date();
+    await this.roomRepo.save(room);
+    await this.redisService.clearRoom(room.roomId);
+    this.eventEmitter.emit('room.deleted', { roomId: room.roomId });
+  }
+
+  async findStaleRooms(thresholdMinutes: number): Promise<Room[]> {
+    const cutoff = new Date(Date.now() - thresholdMinutes * 60 * 1000);
+    return this.roomRepo
+      .createQueryBuilder('room')
+      .where('room.isActive = :isActive', { isActive: true })
+      .andWhere(
+        '(room.lastActivityAt < :cutoff OR (room.lastActivityAt IS NULL AND room.createdAt < :cutoff))',
+        { cutoff },
+      )
+      .getMany();
   }
 }
