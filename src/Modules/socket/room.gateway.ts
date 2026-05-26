@@ -9,7 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MediasoupService } from '../mediasoup/mediasoup.service';
-import { RedisService } from '../redis/redis.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Logger } from '@nestjs/common';
 import {
   Consumer,
@@ -44,7 +44,7 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private readonly mediasoupService: MediasoupService,
-    private readonly redisService: RedisService,
+    private readonly eventEmitter: EventEmitter2,
     private readonly aiService: AiService,
     private readonly socketStateService: SocketStateService,
   ) {}
@@ -75,27 +75,10 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
 
         if (user && user.id) {
-          void this.redisService
-            .removeParticipant(roomId, user.id)
-            .then(async () => {
-              const activeParticipants =
-                await this.redisService.getParticipants(roomId);
-              this.server.to('lobby').emit('room-updated', {
-                roomId,
-                participantCount: activeParticipants.length,
-                participants: activeParticipants.map((p) => ({
-                  userId: p.userId,
-                  firstName: p.firstName || '',
-                  lastName: p.lastName || '',
-                  avatar: p.avatar || '',
-                })),
-              });
-            })
-            .catch((err: unknown) => {
-              this.logger.error(
-                `Error removing participant from redis: ${err instanceof Error ? err.message : String(err)}`,
-              );
-            });
+          this.eventEmitter.emit('room.participant.disconnected', {
+            roomId,
+            userId: user.id,
+          });
         }
       }
 

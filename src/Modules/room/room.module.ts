@@ -4,12 +4,13 @@ import { Room } from './entities/room.entity';
 import { RoomService } from './room.service';
 import { RoomController } from './room.controller';
 import { RoomParticipant } from './entities/room-participant.entity';
-import { SocketModule } from '../socket/socket.module';
+import { RoomCleanupService } from './room-cleanup.service';
+import { MediasoupModule } from '../mediasoup/mediasoup.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Room, RoomParticipant]), SocketModule],
+  imports: [TypeOrmModule.forFeature([Room, RoomParticipant]), MediasoupModule],
   controllers: [RoomController],
-  providers: [RoomService],
+  providers: [RoomService, RoomCleanupService],
   exports: [RoomService],
 })
 export class RoomModule {}

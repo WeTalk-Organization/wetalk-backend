@@ -31,6 +31,8 @@ export class Room {
   maxParticipants: number;
   @Column({ type: 'timestamp', nullable: true })
   endedAt: Date | null;
+  @Column({ type: 'timestamp', nullable: true })
+  lastActivityAt: Date | null;
   @CreateDateColumn()
   createdAt: Date;
 }

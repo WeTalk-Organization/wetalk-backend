@@ -123,4 +123,13 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
   ): mediasoupTypes.WebRtcTransport | undefined {
     return this.transports.get(transportId);
   }
+
+  closeRouter(roomId: string): void {
+    const router = this.routers.get(roomId);
+    if (router && !router.closed) {
+      router.close();
+    }
+    this.routers.delete(roomId);
+    this.logger.log(`Router closed and removed for room: ${roomId}`);
+  }
 }
