@@ -14,9 +14,14 @@ import { AiService } from './ai.service';
           transport: Transport.GRPC,
           options: {
             package: 'transcription',
-            protoPath: join(__dirname, '..', '..', 'proto', 'transcription.proto'),
-            url:
-              configService.get<string>('AI_GRPC_URL') ?? 'localhost:50051',
+            protoPath: join(
+              __dirname,
+              '..',
+              '..',
+              'proto',
+              'transcription.proto',
+            ),
+            url: configService.get<string>('AI_GRPC_URL') ?? 'localhost:50051',
             channelOptions: {
               'grpc.max_receive_message_length': 50 * 1024 * 1024,
               'grpc.max_send_message_length': 50 * 1024 * 1024,
@@ -30,4 +35,4 @@ import { AiService } from './ai.service';
   providers: [AiService],
   exports: [AiService],
 })
-export class AiModule { }
+export class AiModule {}

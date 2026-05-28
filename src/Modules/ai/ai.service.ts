@@ -1,14 +1,7 @@
 import type { ClientGrpc } from '@nestjs/microservices';
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-  Inject,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
 import { firstValueFrom, timeout, catchError } from 'rxjs';
-import {
-  TranscriptionGrpcClient,
-} from './transcription.interface';
+import { TranscriptionGrpcClient } from './transcription.interface';
 
 @Injectable()
 export class AiService implements OnModuleInit {
@@ -24,8 +17,9 @@ export class AiService implements OnModuleInit {
    * lấy gRPC stub từ client package đã đăng ký.
    */
   onModuleInit() {
-    this.transcriptionService =
-      this.client.getService<TranscriptionGrpcClient>('TranscriptionService');
+    this.transcriptionService = this.client.getService<TranscriptionGrpcClient>(
+      'TranscriptionService',
+    );
   }
 
   /**
