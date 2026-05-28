@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package transcription;
+
+service TranscriptionService {
+  rpc Transcribe (TranscribeRequest) returns (TranscribeResponse);
+}
+
+message TranscribeRequest {
+  bytes  audio    = 1;  // raw audio binary (webm/wav/...)
+  string filename = 2;  // e.g. "audio.webm"
+  string language = 3;  // e.g. "vi", "en", "" = auto-detect
+}
+
+message TranscribeResponse {
+  string text = 1;  // transcribed text, empty string if failed
+}

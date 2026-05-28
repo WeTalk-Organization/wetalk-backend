@@ -1,47 +1,66 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import FormData from 'form-data';
-import axios from 'axios';
+import type { ClientGrpc } from '@nestjs/microservices';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Inject,
+} from '@nestjs/common';
+import { firstValueFrom, timeout, catchError } from 'rxjs';
+import {
+  TranscriptionGrpcClient,
+} from './transcription.interface';
 
 @Injectable()
-export class AiService {
+export class AiService implements OnModuleInit {
   private readonly logger = new Logger(AiService.name);
-  private readonly aiServiceUrl: string;
+  private transcriptionService: TranscriptionGrpcClient;
 
-  constructor(private readonly configService: ConfigService) {
-    this.aiServiceUrl =
-      this.configService.get<string>('AI_SERVICE_URL') ??
-      'http://localhost:8000';
+  constructor(
+    @Inject('TRANSCRIPTION_PACKAGE') private readonly client: ClientGrpc,
+  ) {}
+
+  /**
+   * Gọi sau khi module khởi tạo xong —
+   * lấy gRPC stub từ client package đã đăng ký.
+   */
+  onModuleInit() {
+    this.transcriptionService =
+      this.client.getService<TranscriptionGrpcClient>('TranscriptionService');
   }
 
+  /**
+   * Gửi audio buffer đến AI service qua gRPC để transcribe.
+   * Fail-silent: trả về null nếu AI service không khả dụng.
+   */
   async transcribe(
     audioBuffer: Buffer,
     filename: string,
     language?: string,
   ): Promise<string | null> {
     try {
-      const formData = new FormData();
-      formData.append('file', audioBuffer, {
-        filename: filename,
-        contentType: 'audio/webm',
-      });
-
-      if (language) {
-        formData.append('language', language);
-      }
-
-      const response = await axios.post<{ text: string }>(
-        `${this.aiServiceUrl}/v1/audio/transcriptions`,
-        formData,
-        {
-          headers: formData.getHeaders(),
-          timeout: 10000,
-        },
+      const response = await firstValueFrom(
+        this.transcriptionService
+          .transcribe({
+            audio: audioBuffer,
+            filename: filename,
+            language: language ?? '',
+          })
+          .pipe(
+            // Timeout 30 giây — audio dài có thể cần thời gian transcribe
+            timeout(30_000),
+            catchError((err: unknown) => {
+              throw err;
+            }),
+          ),
       );
-      return response.data.text ?? null;
+
+      const text = response.text?.trim() ?? '';
+      return text.length > 0 ? text : null;
     } catch (err: unknown) {
       this.logger.warn(
-        `Transcription failed (fail-silent): ${err instanceof Error ? err.message : String(err)}`,
+        `gRPC transcription failed (fail-silent): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
       );
       return null;
     }
